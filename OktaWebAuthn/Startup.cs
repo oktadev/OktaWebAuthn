@@ -23,7 +23,15 @@ namespace OktaWebAuthn
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddControllersWithViews();
+            services.AddControllersWithViews().AddNewtonsoftJson();
+
+            services.AddFido2(options =>
+            {
+                options.ServerDomain = Configuration["fido2:serverDomain"];
+                options.ServerName = "Okta WebAuthn Demo";
+                options.Origin = Configuration["fido2:origin"];
+                options.TimestampDriftTolerance = Configuration.GetValue<int>("fido2:timestampDriftTolerance");
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
