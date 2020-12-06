@@ -62,17 +62,17 @@ namespace OktaWebAuthn.Controllers
                 var jsonOptions = HttpContext.Session.GetString("fido2.attestationOptions");
                 var options = CredentialCreateOptions.FromJson(jsonOptions);
 
-                var success = await fido2.MakeNewCredentialAsync(attestationResponse, options, IsCredentialUnique);
+                var fidoCredentials = await fido2.MakeNewCredentialAsync(attestationResponse, options, IsCredentialUnique);
 
-                var credential = new StoredCredential
+                var storedCredential = new StoredCredential
                 {
-                    Descriptor = new PublicKeyCredentialDescriptor(success.Result.CredentialId),
-                    PublicKey = success.Result.PublicKey,
-                    UserHandle = success.Result.User.Id,
-                    SignatureCounter = success.Result.Counter,
-                    CredType = success.Result.CredType,
+                    Descriptor = new PublicKeyCredentialDescriptor(fidoCredentials.Result.CredentialId),
+                    PublicKey = fidoCredentials.Result.PublicKey,
+                    UserHandle = fidoCredentials.Result.User.Id,
+                    SignatureCounter = fidoCredentials.Result.Counter,
+                    CredType = fidoCredentials.Result.CredType,
                     RegDate = DateTime.Now,
-                    AaGuid = success.Result.Aaguid
+                    AaGuid = fidoCredentials.Result.Aaguid
                 };
 
                 var result = await oktaClient.Users.CreateUserAsync(new CreateUserWithoutCredentialsOptions
@@ -82,12 +82,12 @@ namespace OktaWebAuthn.Controllers
                         Login = options.User.Name,
                         Email = options.User.Name,
                         DisplayName = options.User.DisplayName,
-                        ["CredentialId"] = Convert.ToBase64String(success.Result.CredentialId),
-                        ["PasswordlessPublicKey"] = JsonConvert.SerializeObject(credential)
+                        ["CredentialId"] = Convert.ToBase64String(fidoCredentials.Result.CredentialId),
+                        ["PasswordlessPublicKey"] = JsonConvert.SerializeObject(storedCredential)
                     }
                 });
 
-                return Json(success);
+                return Json(fidoCredentials);
             }
             catch (Exception e)
             {

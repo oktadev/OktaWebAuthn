@@ -68,8 +68,8 @@ async function handleRegisterSubmit(event) {
     }
 
     try {
-        registerNewCredential(newCredential);
-
+        await registerNewCredential(newCredential);
+        window.location.replace("/AccountController/Signin");
     } catch (e) {
         alert("Could not register new credentials on server");
     }
@@ -125,7 +125,7 @@ async function registerNewCredential(newCredential) {
         return;
     }
 
-    alert("You've registered successfully.");
+    alert("You've registered successfully. You will now be redirected to sign in page");
 }
 
 async function registerCredentialWithServer(formData) {
