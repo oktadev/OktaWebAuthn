@@ -1,0 +1,24 @@
+﻿@{
+    ViewData["Title"] = "Sign In";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <form method="post" id="signin-form">
+            <h4>Sign in without password</h4>
+            <hr />
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input id="email" class="form-control" name="email" />
+            </div>
+            <button type="submit" class="btn btn-primary" id="register">Sign In</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/helpers.js"></script>
+    <script src="~/js/passwordless.login.js"></script>
+}

@@ -95,6 +95,12 @@ namespace OktaWebAuthn.Controllers
             }
         }
 
+        
+        public ActionResult SignIn()
+        {
+            return View();
+        }
+
         async Task<bool> IsCredentialUnique(IsCredentialIdUniqueToUserParams userParams)
         {
             var listUsers = oktaClient.Users.ListUsers(search: $"profile.CredentialId eq \"{Convert.ToBase64String(userParams.CredentialId)}\"");
