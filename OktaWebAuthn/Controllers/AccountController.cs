@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using Fido2NetLib;
 using Fido2NetLib.Development;
 using Fido2NetLib.Objects;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -75,6 +78,7 @@ namespace OktaWebAuthn.Controllers
                     AaGuid = fidoCredentials.Result.Aaguid
                 };
 
+                var names = options.User.DisplayName.Split(' ');
                 var result = await oktaClient.Users.CreateUserAsync(new CreateUserWithoutCredentialsOptions
                 {
                     Profile = new UserProfile
@@ -82,6 +86,8 @@ namespace OktaWebAuthn.Controllers
                         Login = options.User.Name,
                         Email = options.User.Name,
                         DisplayName = options.User.DisplayName,
+                        FirstName = names[0],
+                        LastName = names[1],
                         ["CredentialId"] = Convert.ToBase64String(fidoCredentials.Result.CredentialId),
                         ["PasswordlessPublicKey"] = JsonConvert.SerializeObject(storedCredential)
                     }
@@ -95,17 +101,99 @@ namespace OktaWebAuthn.Controllers
             }
         }
 
-        
+
         public ActionResult SignIn()
         {
             return View();
         }
 
-        async Task<bool> IsCredentialUnique(IsCredentialIdUniqueToUserParams userParams)
+        [HttpPost]
+        public async Task<ActionResult> SignInOptions([FromForm] string username)
+        {
+            try
+            {
+                var user = await oktaClient.Users.GetUserAsync(username);
+
+                if (user == null)
+                    throw new ArgumentException("Username was not registered");
+
+                var credential = JsonConvert.DeserializeObject<StoredCredential>(user.Profile["PasswordlessPublicKey"].ToString());
+
+                var options = fido2.GetAssertionOptions(new List<PublicKeyCredentialDescriptor> { credential.Descriptor }, UserVerificationRequirement.Discouraged);
+
+                HttpContext.Session.SetString("fido2.assertionOptions", options.ToJson());
+
+                return Json(options);
+            }
+
+            catch (Exception e)
+            {
+                return Json(new AssertionOptions { Status = "error", ErrorMessage = e.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<JsonResult> SignIn([FromBody] AuthenticatorAssertionRawResponse clientResponse)
+        {
+            try
+            {
+                var jsonOptions = HttpContext.Session.GetString("fido2.assertionOptions");
+                var options = AssertionOptions.FromJson(jsonOptions);
+
+                var user = await GetUserByCredentials(clientResponse.Id);
+
+                var credential = JsonConvert.DeserializeObject<StoredCredential>(user.Profile["PasswordlessPublicKey"].ToString());
+
+                var result = await fido2.MakeAssertionAsync(clientResponse, options, credential.PublicKey, credential.SignatureCounter, 
+                                                            args => Task.FromResult(credential.UserHandle.SequenceEqual(args.UserHandle)));
+
+                await UpdateCounter(user, credential, result.Counter);
+
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, user.Profile.Email)
+                };
+
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity));
+
+                return Json(result);
+            }
+            catch (Exception e)
+            {
+                return Json(new AssertionVerificationResult { Status = "error", ErrorMessage = e.Message });
+            }
+        }
+
+        public async Task<IActionResult> Profile()
+        {
+            var subject = HttpContext.User.Claims.First(claim => claim.Type == ClaimTypes.Name).Value;
+
+            var user = await oktaClient.Users.GetUserAsync(subject);
+
+            return View(user);
+        }
+
+        private async Task<bool> IsCredentialUnique(IsCredentialIdUniqueToUserParams userParams)
         {
             var listUsers = oktaClient.Users.ListUsers(search: $"profile.CredentialId eq \"{Convert.ToBase64String(userParams.CredentialId)}\"");
             var users = await listUsers.CountAsync();
             return users == 0;
+        }
+
+        private async Task<IUser> GetUserByCredentials(byte[] credentialId)
+        {
+            var listUsers = oktaClient.Users.ListUsers(search: $"profile.CredentialId eq \"{Convert.ToBase64String(credentialId)}\"");
+            var user = await listUsers.FirstAsync();
+            return user;
+        }
+
+        private async Task UpdateCounter(IUser user, StoredCredential credential, uint resultCounter)
+        {
+            credential.SignatureCounter = resultCounter;
+            user.Profile["PasswordlessPublicKey"] = JsonConvert.SerializeObject(credential);
+            await oktaClient.Users.UpdateUserAsync(user, user.Id, false);
         }
     }
 }

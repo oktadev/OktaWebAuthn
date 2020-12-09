@@ -69,7 +69,7 @@ async function handleRegisterSubmit(event) {
 
     try {
         await registerNewCredential(newCredential);
-        window.location.replace("/AccountController/Signin");
+        window.location.replace("/Account/Signin");
     } catch (e) {
         alert("Could not register new credentials on server");
     }
