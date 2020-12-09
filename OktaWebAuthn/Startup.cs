@@ -34,6 +34,8 @@ namespace OktaWebAuthn
                 options.Origin = Configuration["fido2:origin"];
                 options.TimestampDriftTolerance = Configuration.GetValue<int>("fido2:timestampDriftTolerance");
             });
+
+            services.AddAuthentication("Cookie").AddCookie("Cookie");
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -49,7 +51,8 @@ namespace OktaWebAuthn
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
-            
+
+            app.UseAuthentication();
             app.UseSession();
             app.UseHttpsRedirection();
             app.UseStaticFiles();
